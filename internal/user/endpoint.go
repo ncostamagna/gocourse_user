@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ncostamagna/go_lib_response/response"
 	"github.com/ncostamagna/gocourse_meta/meta"
@@ -78,11 +79,11 @@ func makeCreateEndpoint(s Service) Controller {
 		req := request.(CreateReq)
 
 		if req.FirstName == "" {
-			return nil, response.BadRequest("first name is required")
+			return nil, response.BadRequest(ErrFirstNameRequired.Error())
 		}
 
 		if req.LastName == "" {
-			return nil, response.BadRequest("last name is required")
+			return nil, response.BadRequest(ErrLastNameRequired.Error())
 		}
 
 		user, err := s.Create(ctx, req.FirstName, req.LastName, req.Email, req.Phone)
@@ -129,7 +130,12 @@ func makeGetEndpoint(s Service) Controller {
 
 		user, err := s.Get(ctx, req.ID)
 		if err != nil {
-			return nil, response.NotFound(err.Error())
+
+			if errors.As(err, &ErrNotFound{}) {
+				return nil, response.NotFound(err.Error())
+			}
+
+			return nil, response.InternalServerError(err.Error())
 		}
 
 		return response.OK("success", user, nil), nil
@@ -141,14 +147,20 @@ func makeUpdateEndpoint(s Service) Controller {
 		req := request.(UpdateReq)
 
 		if req.FirstName != nil && *req.FirstName == "" {
-			return nil, response.BadRequest("first name is required")
+			return nil, response.BadRequest(ErrFirstNameRequired.Error())
 		}
 
 		if req.LastName != nil && *req.LastName == "" {
-			return nil, response.BadRequest("last name is required")
+			return nil, response.BadRequest(ErrLastNameRequired.Error())
 		}
 
-		if err := s.Update(ctx, req.ID, req.FirstName, req.LastName, req.Email, req.Phone); err != nil {
+		err := s.Update(ctx, req.ID, req.FirstName, req.LastName, req.Email, req.Phone)
+		if err != nil {
+
+			if errors.As(err, &ErrNotFound{}) {
+				return nil, response.NotFound(err.Error())
+			}
+
 			return nil, response.InternalServerError(err.Error())
 		}
 
@@ -161,7 +173,13 @@ func makeDeleteEndpoint(s Service) Controller {
 
 		req := request.(DeleteReq)
 
-		if err := s.Delete(ctx, req.ID); err != nil {
+		err := s.Delete(ctx, req.ID)
+
+		if err != nil {
+
+			if errors.As(err, &ErrNotFound{}) {
+				return nil, response.NotFound(err.Error())
+			}
 			return nil, response.InternalServerError(err.Error())
 		}
 
